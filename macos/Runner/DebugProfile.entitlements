@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Sandbox enabled (required for Mac App Store) -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Allow JIT compilation (required for Flutter debug/profile) -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<!-- Outgoing network connections for Firebase, AI APIs, Google Fonts -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Incoming connections for Flutter DevTools in debug/profile mode -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+</dict>
+</plist>

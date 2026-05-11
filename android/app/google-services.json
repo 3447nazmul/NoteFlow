@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "682411236951",
+    "project_id": "noteflow-abd14",
+    "storage_bucket": "noteflow-abd14.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:682411236951:android:7cb819923506c149f04d12",
+        "android_client_info": {
+          "package_name": "com.noteflow.smart_notes_ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "682411236951-o1qihbklvbm1t78uqqf0bmvg6vt0j84o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.noteflow.smart_notes_ai",
+            "certificate_hash": "2e22b5ff2a83085ecfe38691c3c6c0daf5057377"
+          }
+        },
+        {
+          "client_id": "682411236951-9fh6ns14pljun6vh55f2q88an3dfiobf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChk04x15zSXn-h6MBByaqwHWD9uXsari0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "682411236951-9fh6ns14pljun6vh55f2q88an3dfiobf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "682411236951-bfjqr2itdvldms79fl98av19mqrr9pqp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.noteflow.smartNotesAi"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
