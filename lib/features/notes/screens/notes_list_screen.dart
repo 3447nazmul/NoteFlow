@@ -73,6 +73,9 @@ class _NotesListScreenState extends State<NotesListScreen> {
             // ─────── Offline banner ───────
             const _OfflineBanner(),
 
+            // ─────── API key prompt banner ───────
+            const _ApiKeyBanner(),
+
             // ─────── Active tag filter bar ───────
             const _ActiveTagBar(),
 
@@ -753,6 +756,110 @@ class _ActiveTagBar extends StatelessWidget {
                         size: 18,
                         color: cs.onSurfaceVariant,
                       ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+/// ──────────────────────────────────────────────────────────────
+/// API Key Banner — elegant prompt to add API key for AI features
+/// ──────────────────────────────────────────────────────────────
+
+class _ApiKeyBanner extends StatefulWidget {
+  const _ApiKeyBanner();
+
+  @override
+  State<_ApiKeyBanner> createState() => _ApiKeyBannerState();
+}
+
+class _ApiKeyBannerState extends State<_ApiKeyBanner> {
+  bool _hasApiKey = true; // assume true until checked
+
+  @override
+  void initState() {
+    super.initState();
+    _checkApiKey();
+  }
+
+  Future<void> _checkApiKey() async {
+    final config = context.read<AppConfigService>();
+    if (config.useGlobalApiKeys) {
+      if (mounted) setState(() => _hasApiKey = true);
+      return;
+    }
+    final key = await ApiKeyService().getActiveKey();
+    if (mounted) {
+      setState(() {
+        _hasApiKey = key != null && key.trim().isNotEmpty;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: _hasApiKey
+          ? const SizedBox.shrink()
+          : Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    cs.primary.withValues(alpha: 0.08),
+                    cs.tertiary.withValues(alpha: 0.06),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: cs.primary.withValues(alpha: 0.15),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 16,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Add API to smart AI note',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 30,
+                    child: FilledButton.tonal(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/settings'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        textStyle: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Add'),
                     ),
                   ),
                 ],

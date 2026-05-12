@@ -84,36 +84,72 @@ class AppConfigService extends ChangeNotifier {
     return _isVersionGreaterThan(_forceUpdateVersion, _currentAppVersion);
   }
 
+  // Track if config has been fetched at least once
+  bool _configFetched = false;
+  bool get configFetched => _configFetched;
+
   // ─── Initialization ───
 
   Future<void> init() async {
     try {
+      print('[AppConfig] init() — Fetching app version...');
       final packageInfo = await PackageInfo.fromPlatform();
       _currentAppVersion = packageInfo.version;
+      print('[AppConfig] init() — App version: $_currentAppVersion');
     } catch (e) {
+      print('[AppConfig] init() — ERROR fetching app version: $e');
       if (kDebugMode) debugPrint('Could not fetch app version: $e');
     }
   }
 
   Future<void> fetchInitialConfig() async {
+    print('[AppConfig] fetchInitialConfig() — Starting Firestore fetch...');
     try {
-      final snapshot = await _firestore.collection('app_config').doc('global_settings').get();
+      print('[AppConfig] fetchInitialConfig() — Requesting doc: app_config/global_settings');
+      final snapshot = await _firestore
+          .collection('app_config')
+          .doc('global_settings')
+          .get()
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              print('[AppConfig] fetchInitialConfig() — TIMEOUT after 10s');
+              throw Exception('Firestore fetch timed out after 10 seconds');
+            },
+          );
+      
+      print('[AppConfig] fetchInitialConfig() — Snapshot received. exists=${snapshot.exists}');
+      
       if (snapshot.exists && snapshot.data() != null) {
-        _updateFromData(snapshot.data()!);
+        final data = snapshot.data()!;
+        print('[AppConfig] fetchInitialConfig() — Data keys: ${data.keys.toList()}');
+        _updateFromData(data);
+        _configFetched = true;
+        print('[AppConfig] fetchInitialConfig() — Config applied successfully ✓');
+      } else {
+        print('[AppConfig] fetchInitialConfig() — Document does not exist or is empty. Using defaults.');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('[AppConfig] fetchInitialConfig() — ERROR: $e');
+      print('[AppConfig] fetchInitialConfig() — Stack: $stackTrace');
       if (kDebugMode) debugPrint('Error fetching initial config: $e');
     }
+    
+    // Always start listener even if initial fetch failed
+    print('[AppConfig] fetchInitialConfig() — Starting real-time listener...');
     _listenToConfig();
   }
 
   void _updateFromData(Map<String, dynamic> data) {
+    print('[AppConfig] _updateFromData() — Parsing ${data.length} fields...');
+    
     // App Management
     _isMaintenanceMode = data['is_maintenance_mode'] as bool? ?? false;
     _maintenanceMessage = data['maintenance_message'] as String? ?? 'We are currently under maintenance. Please check back later.';
     _forceUpdateVersion = data['force_update_version'] as String? ?? '1.0.0';
     _updateUrl = data['update_url'] as String? ?? 'https://noteflow.app';
     _betaBadgeText = data['beta_badge_text'] as String? ?? 'BETA';
+    print('[AppConfig]   maintenance=$_isMaintenanceMode, forceUpdate=$_forceUpdateVersion, badge=$_betaBadgeText');
 
     // Contact & Social
     _supportEmail = data['support_email'] as String? ?? 'support@noteflow.app';
@@ -125,6 +161,7 @@ class AppConfigService extends ChangeNotifier {
     _activeAiModel = data['active_ai_model'] as String? ?? 'gemini-3.1-flash';
     _qwenAiModel = data['qwen_ai_model'] as String? ?? 'qwen-turbo';
     _dailyLimit = data['daily_limit'] as int? ?? 50;
+    print('[AppConfig]   aiModel=$_activeAiModel, qwenModel=$_qwenAiModel, dailyLimit=$_dailyLimit');
 
     // Legal
     _privacyPolicyUrl = data['privacy_policy_url'] as String? ?? 'https://noteflow.app/privacy';
@@ -134,27 +171,35 @@ class AppConfigService extends ChangeNotifier {
     _showAds = data['show_ads'] as bool? ?? false;
     _admobBannerId = data['admob_banner_id'] as String? ?? 'ca-app-pub-3940256099942544/6300978111';
     _admobInterstitialId = data['admob_interstitial_id'] as String? ?? 'ca-app-pub-3940256099942544/1033173712';
+    print('[AppConfig]   showAds=$_showAds');
 
     // Global API Key Override
     _useGlobalApiKeys = data['use_global_api_keys'] as bool? ?? false;
     _globalGeminiKey = data['global_gemini_key'] as String? ?? '';
     _globalQwenKey = data['global_qwen_key'] as String? ?? '';
+    print('[AppConfig]   useGlobalApiKeys=$_useGlobalApiKeys, hasGeminiKey=${_globalGeminiKey.isNotEmpty}, hasQwenKey=${_globalQwenKey.isNotEmpty}');
 
+    print('[AppConfig] _updateFromData() — Calling notifyListeners()');
     notifyListeners();
   }
 
   void _listenToConfig() {
+    print('[AppConfig] _listenToConfig() — Setting up Firestore snapshot listener...');
     _configSub = _firestore
         .collection('app_config')
         .doc('global_settings')
         .snapshots()
         .listen((snapshot) {
+      print('[AppConfig] _listenToConfig() — Snapshot event received. exists=${snapshot.exists}');
       if (snapshot.exists && snapshot.data() != null) {
+        _configFetched = true;
         _updateFromData(snapshot.data()!);
       }
     }, onError: (error) {
+      print('[AppConfig] _listenToConfig() — ERROR: $error');
       if (kDebugMode) debugPrint('Error listening to app config: $error');
     });
+    print('[AppConfig] _listenToConfig() — Listener registered ✓');
   }
 
   @override

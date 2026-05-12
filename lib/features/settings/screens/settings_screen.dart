@@ -66,8 +66,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadState();
   }
 
+  bool _configListenerAdded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Force rebuild when config changes arrive after initial load
+    if (!_configListenerAdded) {
+      _configListenerAdded = true;
+      context.read<AppConfigService>().addListener(_onConfigChanged);
+    }
+  }
+
+  void _onConfigChanged() {
+    if (mounted) {
+      print('[Settings] AppConfigService notified — rebuilding settings screen');
+      setState(() {});
+    }
+  }
+
   @override
   void dispose() {
+    // Remove the config listener to avoid leaks
+    try {
+      context.read<AppConfigService>().removeListener(_onConfigChanged);
+    } catch (_) {
+      // Context may not be available during dispose
+    }
     _geminiController.dispose();
     _qwenController.dispose();
     super.dispose();

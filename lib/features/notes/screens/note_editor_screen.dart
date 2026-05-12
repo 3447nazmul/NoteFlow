@@ -50,6 +50,7 @@ class NoteEditorScreen extends StatefulWidget {
 class _NoteEditorScreenState extends State<NoteEditorScreen> {
   late TextEditingController _titleController;
   late quill.QuillController _quillController;
+  final FocusNode _editorFocusNode = FocusNode();
 
   Note? _note;
   bool _hasUnsavedChanges = false;
@@ -119,6 +120,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
     _titleController.dispose();
     _quillController.dispose();
+    _editorFocusNode.dispose();
     super.dispose();
   }
 
@@ -269,11 +271,23 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   // ─── Formatting toolbar actions ───
 
-  void _insertBold() => _quillController.formatSelection(quill.Attribute.bold);
-  void _insertItalic() => _quillController.formatSelection(quill.Attribute.italic);
-  void _insertUnderline() => _quillController.formatSelection(quill.Attribute.underline);
-  void _insertStrikethrough() => _quillController.formatSelection(quill.Attribute.strikeThrough);
-  void _insertBullet() => _quillController.formatSelection(quill.Attribute.ul);
+  void _toggleFormat(quill.Attribute attribute) {
+    final style = _quillController.getSelectionStyle();
+    final isActive = style.attributes.containsKey(attribute.key);
+    if (isActive) {
+      _quillController.formatSelection(quill.Attribute.clone(attribute, null));
+    } else {
+      _quillController.formatSelection(attribute);
+    }
+    // Trigger rebuild so toolbar reflects new state
+    setState(() {});
+  }
+
+  void _insertBold() => _toggleFormat(quill.Attribute.bold);
+  void _insertItalic() => _toggleFormat(quill.Attribute.italic);
+  void _insertUnderline() => _toggleFormat(quill.Attribute.underline);
+  void _insertStrikethrough() => _toggleFormat(quill.Attribute.strikeThrough);
+  void _insertBullet() => _toggleFormat(quill.Attribute.ul);
 
   void _toggleChecklist() {
     HapticFeedback.selectionClick();
@@ -291,50 +305,146 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   // ─── Image OCR & Attachments ───
 
   Future<void> _pickImage() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt_rounded),
-              title: const Text('Camera'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_rounded),
-              title: const Text('Gallery'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-          ],
+    try {
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded),
+                title: const Text('Camera'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded),
+                title: const Text('Gallery'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
 
-    if (source == null) return;
-    final pickedFile = await _picker.pickImage(source: source);
-    if (pickedFile == null) return;
+      if (source == null) return;
 
-    await _saveAttachmentLocally(pickedFile.path, 'image');
+      debugPrint('[NoteFlow] Picking image from: $source');
+      final pickedFile = await _picker.pickImage(source: source);
+      if (pickedFile == null) {
+        debugPrint('[NoteFlow] Image pick cancelled by user');
+        return;
+      }
+
+      debugPrint('[NoteFlow] Image picked: ${pickedFile.path}');
+      await _saveAttachmentLocally(pickedFile.path, 'image');
+    } on PlatformException catch (e) {
+      debugPrint('[NoteFlow] PlatformException picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.code == 'camera_access_denied' || e.code == 'photo_access_denied'
+                  ? 'Permission denied. Please allow access in Settings.'
+                  : 'Could not pick image: ${e.message}',
+            ),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[NoteFlow] Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'html', 'pptx', 'mp3', 'wav', 'xls', 'xlsx'],
-    );
+    try {
+      debugPrint('[NoteFlow] Opening file picker...');
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'html', 'pptx', 'mp3', 'wav', 'xls', 'xlsx'],
+      );
 
-    if (result != null && result.files.single.path != null) {
-      final ext = result.files.single.extension?.toLowerCase() ?? 'file';
-      await _saveAttachmentLocally(result.files.single.path!, ext);
+      if (result == null || result.files.isEmpty) {
+        debugPrint('[NoteFlow] File pick cancelled by user');
+        return;
+      }
+
+      final file = result.files.single;
+      if (file.path == null) {
+        debugPrint('[NoteFlow] File path is null (web platform?)');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not access the selected file.')),
+          );
+        }
+        return;
+      }
+
+      debugPrint('[NoteFlow] File picked: ${file.path}, ext: ${file.extension}');
+      final ext = file.extension?.toLowerCase() ?? 'file';
+      await _saveAttachmentLocally(file.path!, ext);
+    } on PlatformException catch (e) {
+      debugPrint('[NoteFlow] PlatformException picking file: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Permission denied or file picker error: ${e.message}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[NoteFlow] Error picking file: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick file: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _saveAttachmentLocally(String sourcePath, String type) async {
     try {
+      debugPrint('[NoteFlow] Saving attachment locally: $sourcePath (type: $type)');
+      
+      // Verify source file exists
+      final sourceFile = File(sourcePath);
+      if (!await sourceFile.exists()) {
+        debugPrint('[NoteFlow] Source file does not exist: $sourcePath');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Selected file could not be found.')),
+          );
+        }
+        return;
+      }
+
       final appDir = await getApplicationDocumentsDirectory();
+      // Create a dedicated subdirectory for attachments
+      final attachDir = Directory('${appDir.path}/noteflow_attachments');
+      if (!await attachDir.exists()) {
+        await attachDir.create(recursive: true);
+      }
+      
       final fileName = sourcePath.split(Platform.pathSeparator).last;
-      final savedFile = await File(sourcePath).copy('${appDir.path}/$fileName');
+      // Add timestamp to avoid name collisions
+      final uniqueName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      final destPath = '${attachDir.path}/$uniqueName';
+      
+      debugPrint('[NoteFlow] Copying to: $destPath');
+      final savedFile = await sourceFile.copy(destPath);
+      debugPrint('[NoteFlow] Attachment saved successfully: ${savedFile.path}');
 
       setState(() {
         _attachments.add({
@@ -345,7 +455,18 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         });
       });
       _onContentChanged();
+    } on FileSystemException catch (e) {
+      debugPrint('[NoteFlow] FileSystemException saving attachment: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Storage permission error: ${e.message}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     } catch (e) {
+      debugPrint('[NoteFlow] Error saving attachment: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to attach file: $e')),
@@ -362,30 +483,35 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 
   Future<void> _pickImageAndExtractText() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt_rounded),
-              title: const Text('Camera'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_rounded),
-              title: const Text('Gallery'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-          ],
+    try {
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded),
+                title: const Text('Camera'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded),
+                title: const Text('Gallery'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
 
-    if (source == null) return;
+      if (source == null) return;
 
-    final pickedFile = await _picker.pickImage(source: source);
-    if (pickedFile == null) return;
+      debugPrint('[NoteFlow] Picking image for OCR from: $source');
+      final pickedFile = await _picker.pickImage(source: source);
+      if (pickedFile == null) {
+        debugPrint('[NoteFlow] OCR image pick cancelled');
+        return;
+      }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -435,6 +561,29 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         );
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Text extracted successfully.')),
+        );
+      }
+    }
+    } on PlatformException catch (e) {
+      debugPrint('[NoteFlow] PlatformException during OCR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Permission denied: ${e.message}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[NoteFlow] Error during OCR extraction: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('OCR failed: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
       }
     }
@@ -974,145 +1123,139 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
           children: [
             // ─── Editor body ───
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title field
-                    TextField(
-                      controller: _titleController,
-                      onChanged: (_) => _onContentChanged(),
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Note title…',
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        filled: false,
-                        contentPadding: EdgeInsets.zero,
-                        hintStyle: GoogleFonts.poppins(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  // Tapping empty space focuses the editor and shows keyboard
+                  if (!_editorFocusNode.hasFocus) {
+                    _editorFocusNode.requestFocus();
+                  }
+                },
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 8,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title field
+                      TextField(
+                        controller: _titleController,
+                        onChanged: (_) => _onContentChanged(),
+                        style: GoogleFonts.poppins(
                           fontSize: 28,
                           fontWeight: FontWeight.w700,
-                          color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+                          color: cs.onSurface,
                         ),
+                        decoration: InputDecoration(
+                          hintText: 'Note title…',
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          filled: false,
+                          contentPadding: EdgeInsets.zero,
+                          hintStyle: GoogleFonts.poppins(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        maxLines: null,
+                        textCapitalization: TextCapitalization.sentences,
                       ),
-                      maxLines: null,
-                      textCapitalization: TextCapitalization.sentences,
-                    ),
 
-                    if (!_hasApiKey) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                      const SizedBox(height: 4),
+
+                      // Body field
+                      quill.QuillEditor.basic(
+                        controller: _quillController,
+                        focusNode: _editorFocusNode,
+                      ),
+
+                      // ─── Spacer to make tappable area fill remaining space ───
+                      const SizedBox(height: 200),
+
+                      // ─── Checklist section ───
+                      if (_showChecklist) ...[
+                        const SizedBox(height: 16),
+                        ChecklistWidget(
+                          items: _checklistItems,
+                          onChanged: (items) {
+                            _checklistItems = items;
+                            _onContentChanged();
+                          },
                         ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.auto_awesome_rounded, size: 18, color: cs.primary),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Add your API key in settings to experience full AI features',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  color: cs.onSurfaceVariant,
-                                ),
+                      ],
+
+                      // ─── Attachments section ───
+                      if (_attachments.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _attachments.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final att = entry.value;
+                            IconData iconData = Icons.insert_drive_file_rounded;
+                            Color iconColor = cs.primary;
+                            
+                            if (att['type'] == 'image') {
+                              iconData = Icons.image_rounded;
+                              iconColor = Colors.purple;
+                            } else if (att['type'] == 'pdf') {
+                              iconData = Icons.picture_as_pdf_rounded;
+                              iconColor = Colors.red;
+                            } else if (att['type'] == 'doc' || att['type'] == 'docx') {
+                              iconData = Icons.description_rounded;
+                              iconColor = Colors.blue;
+                            } else if (att['type'] == 'mp3' || att['type'] == 'wav') {
+                              iconData = Icons.audio_file_rounded;
+                              iconColor = Colors.orange;
+                            }
+
+                            return Chip(
+                              avatar: Icon(iconData, color: iconColor, size: 18),
+                              label: Text(
+                                att['name'] ?? 'File',
+                                style: GoogleFonts.poppins(fontSize: 12),
                               ),
-                            ),
-                          ],
+                              onDeleted: () => _removeAttachment(idx),
+                              deleteIcon: const Icon(Icons.close_rounded, size: 16),
+                              backgroundColor: cs.surfaceContainerHigh,
+                              side: BorderSide.none,
+                            );
+                          }).toList(),
                         ),
-                      ),
+                      ],
                     ],
-
-                    const SizedBox(height: 4),
-
-                    // Body field
-                    quill.QuillEditor.basic(
-                      controller: _quillController,
-                    ),
-
-                    // ─── Checklist section ───
-                    if (_showChecklist) ...[
-                      const SizedBox(height: 16),
-                      ChecklistWidget(
-                        items: _checklistItems,
-                        onChanged: (items) {
-                          _checklistItems = items;
-                          _onContentChanged();
-                        },
-                      ),
-                    ],
-
-                    // ─── Attachments section ───
-                    if (_attachments.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _attachments.asMap().entries.map((entry) {
-                          final idx = entry.key;
-                          final att = entry.value;
-                          IconData iconData = Icons.insert_drive_file_rounded;
-                          Color iconColor = cs.primary;
-                          
-                          if (att['type'] == 'image') {
-                            iconData = Icons.image_rounded;
-                            iconColor = Colors.purple;
-                          } else if (att['type'] == 'pdf') {
-                            iconData = Icons.picture_as_pdf_rounded;
-                            iconColor = Colors.red;
-                          } else if (att['type'] == 'doc' || att['type'] == 'docx') {
-                            iconData = Icons.description_rounded;
-                            iconColor = Colors.blue;
-                          } else if (att['type'] == 'mp3' || att['type'] == 'wav') {
-                            iconData = Icons.audio_file_rounded;
-                            iconColor = Colors.orange;
-                          }
-
-                          return Chip(
-                            avatar: Icon(iconData, color: iconColor, size: 18),
-                            label: Text(
-                              att['name'] ?? 'File',
-                              style: GoogleFonts.poppins(fontSize: 12),
-                            ),
-                            onDeleted: () => _removeAttachment(idx),
-                            deleteIcon: const Icon(Icons.close_rounded, size: 16),
-                            backgroundColor: cs.surfaceContainerHigh,
-                            side: BorderSide.none,
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),
 
             // ─── Formatting toolbar ───
-            _FormattingToolbar(
-              onBold: _insertBold,
-              onItalic: _insertItalic,
-              onUnderline: _insertUnderline,
-              onStrikethrough: _insertStrikethrough,
-              onBullet: _insertBullet,
-              onChecklist: _toggleChecklist,
-              checklistActive: _showChecklist,
-              onOcr: _pickImageAndExtractText,
-              onAttachImage: _pickImage,
-              onAttachFile: _pickFile,
-              showAiTools: _hasApiKey,
-            ),
+            Builder(builder: (_) {
+              final style = _quillController.getSelectionStyle();
+              return _FormattingToolbar(
+                onBold: _insertBold,
+                onItalic: _insertItalic,
+                onUnderline: _insertUnderline,
+                onStrikethrough: _insertStrikethrough,
+                onBullet: _insertBullet,
+                onChecklist: _toggleChecklist,
+                isBoldActive: style.attributes.containsKey(quill.Attribute.bold.key),
+                isItalicActive: style.attributes.containsKey(quill.Attribute.italic.key),
+                isUnderlineActive: style.attributes.containsKey(quill.Attribute.underline.key),
+                isStrikethroughActive: style.attributes.containsKey(quill.Attribute.strikeThrough.key),
+                isBulletActive: style.attributes.containsKey(quill.Attribute.ul.key),
+                checklistActive: _showChecklist,
+                onOcr: _pickImageAndExtractText,
+                onAttachImage: _pickImage,
+                onAttachFile: _pickFile,
+                showAiTools: _hasApiKey,
+              );
+            }),
 
             // ─── Word / character count ───
             _StatsBar(wordCount: _wordCount, charCount: _charCount),
@@ -1282,6 +1425,11 @@ class _FormattingToolbar extends StatelessWidget {
   final VoidCallback onStrikethrough;
   final VoidCallback onBullet;
   final VoidCallback onChecklist;
+  final bool isBoldActive;
+  final bool isItalicActive;
+  final bool isUnderlineActive;
+  final bool isStrikethroughActive;
+  final bool isBulletActive;
   final bool checklistActive;
   final VoidCallback onOcr;
   final VoidCallback onAttachImage;
@@ -1295,6 +1443,11 @@ class _FormattingToolbar extends StatelessWidget {
     required this.onStrikethrough,
     required this.onBullet,
     required this.onChecklist,
+    this.isBoldActive = false,
+    this.isItalicActive = false,
+    this.isUnderlineActive = false,
+    this.isStrikethroughActive = false,
+    this.isBulletActive = false,
     this.checklistActive = false,
     required this.onOcr,
     required this.onAttachImage,
@@ -1328,26 +1481,31 @@ class _FormattingToolbar extends StatelessWidget {
               icon: Icons.format_bold_rounded,
               tooltip: 'Bold',
               onPressed: onBold,
+              isActive: isBoldActive,
             ),
             _ToolbarButton(
               icon: Icons.format_italic_rounded,
               tooltip: 'Italic',
               onPressed: onItalic,
+              isActive: isItalicActive,
             ),
             _ToolbarButton(
               icon: Icons.format_underlined_rounded,
               tooltip: 'Underline',
               onPressed: onUnderline,
+              isActive: isUnderlineActive,
             ),
             _ToolbarButton(
               icon: Icons.format_strikethrough_rounded,
               tooltip: 'Strikethrough',
               onPressed: onStrikethrough,
+              isActive: isStrikethroughActive,
             ),
             _ToolbarButton(
               icon: Icons.format_list_bulleted_rounded,
               tooltip: 'Bullet List',
               onPressed: onBullet,
+              isActive: isBulletActive,
             ),
             _ToolbarButton(
               icon: Icons.checklist_rounded,

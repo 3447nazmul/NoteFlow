@@ -339,10 +339,10 @@ class ExportService {
     Uint8List? logoBytes,
   ) {
     return pw.Container(
-      padding: const pw.EdgeInsets.only(top: 12),
+      padding: const pw.EdgeInsets.only(top: 10),
       decoration: const pw.BoxDecoration(
         border: pw.Border(
-          top: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+          top: pw.BorderSide(color: PdfColors.grey300, width: 0.4),
         ),
       ),
       child: pw.Row(
@@ -351,38 +351,42 @@ class ExportService {
           // ── Branded text ──
           pw.Row(
             children: [
-              // Logo placeholder or actual image
+              // App logo or fallback
               if (logoBytes != null)
-                pw.Container(
-                  width: 18,
-                  height: 18,
-                  child: pw.Image(pw.MemoryImage(logoBytes)),
+                pw.ClipRRect(
+                  horizontalRadius: 3,
+                  verticalRadius: 3,
+                  child: pw.Container(
+                    width: 14,
+                    height: 14,
+                    child: pw.Image(pw.MemoryImage(logoBytes)),
+                  ),
                 )
               else
                 pw.Container(
-                  width: 18,
-                  height: 18,
+                  width: 14,
+                  height: 14,
                   decoration: pw.BoxDecoration(
                     color: brandColor,
-                    borderRadius: pw.BorderRadius.circular(4),
+                    borderRadius: pw.BorderRadius.circular(3),
                   ),
                   child: pw.Center(
                     child: pw.Text(
-                      '✎',
+                      'N',
                       style: pw.TextStyle(
                         font: semiBoldFont,
-                        fontSize: 10,
+                        fontSize: 8,
                         color: PdfColors.white,
                       ),
                     ),
                   ),
                 ),
-              pw.SizedBox(width: 8),
+              pw.SizedBox(width: 6),
               pw.Text(
                 'Created with ',
                 style: pw.TextStyle(
                   font: regularFont,
-                  fontSize: 9,
+                  fontSize: 7.5,
                   color: mutedColor,
                 ),
               ),
@@ -390,7 +394,7 @@ class ExportService {
                 'NoteFlow',
                 style: pw.TextStyle(
                   font: semiBoldFont,
-                  fontSize: 9,
+                  fontSize: 7.5,
                   color: brandColor,
                 ),
               ),
@@ -401,7 +405,7 @@ class ExportService {
             'Page ${context.pageNumber} of ${context.pagesCount}',
             style: pw.TextStyle(
               font: regularFont,
-              fontSize: 9,
+              fontSize: 7.5,
               color: mutedColor,
             ),
           ),
@@ -600,33 +604,27 @@ class _BrandedNoteCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [brandIndigo, brandIndigo.withValues(alpha: 0.7)],
-                  ),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: const Icon(
-                  Icons.edit_document,
-                  size: 10,
-                  color: Colors.white,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Image.asset(
+                  'assets/images/ic_launcher.png',
+                  width: 14,
+                  height: 14,
+                  fit: BoxFit.cover,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
                 'Created with ',
                 style: GoogleFonts.poppins(
-                  fontSize: 9,
-                  color: cs.onSurfaceVariant,
+                  fontSize: 8,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.6),
                 ),
               ),
               Text(
                 'NoteFlow',
                 style: GoogleFonts.poppins(
-                  fontSize: 9,
+                  fontSize: 8,
                   fontWeight: FontWeight.w700,
                   color: brandIndigo,
                 ),
