@@ -54,3 +54,8 @@ flutter:
   assets:
     - assets/images/
     - assets/fonts/
+flutter_native_splash:
+  color: "#FCF8FF"
+  image: assets/images/ic_launcher.png
+  android: true
+  ios: true

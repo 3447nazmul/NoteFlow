@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:archive/archive_io.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -44,14 +45,23 @@ class ExportService {
     );
 
     // Load a base font for the PDF
-    final regularFont = await PdfGoogleFonts.poppinsRegular();
-    final boldFont = await PdfGoogleFonts.poppinsBold();
-    final semiBoldFont = await PdfGoogleFonts.poppinsSemiBold();
+    final regularFont = await PdfGoogleFonts.notoSansBengaliRegular();
+    final boldFont = await PdfGoogleFonts.notoSansBengaliBold();
+    final semiBoldFont = await PdfGoogleFonts.notoSansBengaliSemiBold();
 
     final brandColor = PdfColor.fromHex('#4648D4');
     final lightBrandBg = PdfColor.fromHex('#F0F0FF');
     final textColor = PdfColor.fromHex('#1B1B23');
     final mutedColor = PdfColor.fromHex('#464554');
+
+    // Load logo bytes
+    Uint8List? logoBytes;
+    try {
+      final ByteData bytes = await rootBundle.load('assets/images/ic_launcher.png');
+      logoBytes = bytes.buffer.asUint8List();
+    } catch (e) {
+      debugPrint('Could not load app logo for PDF: $e');
+    }
 
     pdf.addPage(
       pw.MultiPage(
@@ -65,6 +75,7 @@ class ExportService {
           semiBoldFont,
           brandColor,
           mutedColor,
+          logoBytes,
         ),
 
         build: (context) => [
@@ -325,6 +336,7 @@ class ExportService {
     pw.Font semiBoldFont,
     PdfColor brandColor,
     PdfColor mutedColor,
+    Uint8List? logoBytes,
   ) {
     return pw.Container(
       padding: const pw.EdgeInsets.only(top: 12),
@@ -339,25 +351,32 @@ class ExportService {
           // ── Branded text ──
           pw.Row(
             children: [
-              // Logo placeholder (pen icon via text)
-              pw.Container(
-                width: 18,
-                height: 18,
-                decoration: pw.BoxDecoration(
-                  color: brandColor,
-                  borderRadius: pw.BorderRadius.circular(4),
-                ),
-                child: pw.Center(
-                  child: pw.Text(
-                    '✎',
-                    style: pw.TextStyle(
-                      font: semiBoldFont,
-                      fontSize: 10,
-                      color: PdfColors.white,
+              // Logo placeholder or actual image
+              if (logoBytes != null)
+                pw.Container(
+                  width: 18,
+                  height: 18,
+                  child: pw.Image(pw.MemoryImage(logoBytes)),
+                )
+              else
+                pw.Container(
+                  width: 18,
+                  height: 18,
+                  decoration: pw.BoxDecoration(
+                    color: brandColor,
+                    borderRadius: pw.BorderRadius.circular(4),
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      '✎',
+                      style: pw.TextStyle(
+                        font: semiBoldFont,
+                        fontSize: 10,
+                        color: PdfColors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
               pw.SizedBox(width: 8),
               pw.Text(
                 'Created with ',
@@ -582,8 +601,8 @@ class _BrandedNoteCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 20,
-                height: 20,
+                width: 14,
+                height: 14,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [brandIndigo, brandIndigo.withValues(alpha: 0.7)],
@@ -592,7 +611,7 @@ class _BrandedNoteCard extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.edit_document,
-                  size: 14,
+                  size: 10,
                   color: Colors.white,
                 ),
               ),
@@ -600,14 +619,14 @@ class _BrandedNoteCard extends StatelessWidget {
               Text(
                 'Created with ',
                 style: GoogleFonts.poppins(
-                  fontSize: 12,
+                  fontSize: 9,
                   color: cs.onSurfaceVariant,
                 ),
               ),
               Text(
                 'NoteFlow',
                 style: GoogleFonts.poppins(
-                  fontSize: 12,
+                  fontSize: 9,
                   fontWeight: FontWeight.w700,
                   color: brandIndigo,
                 ),

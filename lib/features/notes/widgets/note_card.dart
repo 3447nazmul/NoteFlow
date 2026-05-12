@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -48,6 +51,16 @@ class NoteCard extends StatelessWidget {
     final activeTag = context.select<NotesController, String>(
       (c) => c.activeTag,
     );
+
+    String previewText = note.body;
+    if (previewText.startsWith('[{"insert"')) {
+      try {
+        final json = jsonDecode(previewText);
+        previewText = quill.Document.fromJson(json).toPlainText().trim();
+      } catch (e) {
+        // Fallback if parsing fails
+      }
+    }
 
     return Card(
       child: InkWell(
@@ -119,11 +132,11 @@ class NoteCard extends StatelessWidget {
               const SizedBox(height: 8),
 
               // ─── Body preview (first 80 chars) ───
-              if (note.body.isNotEmpty)
+              if (previewText.isNotEmpty)
                 HighlightedText(
-                  text: note.body.length > 80
-                      ? '${note.body.substring(0, 80)}…'
-                      : note.body,
+                  text: previewText.length > 80
+                      ? '${previewText.substring(0, 80)}…'
+                      : previewText,
                   query: searchQuery,
                   style: GoogleFonts.poppins(
                     fontSize: 13,
@@ -552,7 +565,16 @@ class NoteCard extends StatelessWidget {
 
   /// Copy note content to clipboard (share).
   void _shareNote(BuildContext context) {
-    final text = '${note.displayTitle}\n\n${note.body}';
+    String bodyText = note.body;
+    if (bodyText.startsWith('[{"insert"')) {
+      try {
+        final json = jsonDecode(bodyText);
+        bodyText = quill.Document.fromJson(json).toPlainText().trim();
+      } catch (_) {
+        // Fallback to raw body
+      }
+    }
+    final text = '${note.displayTitle}\n\n$bodyText';
     Clipboard.setData(ClipboardData(text: text));
 
     ScaffoldMessenger.of(context).showSnackBar(

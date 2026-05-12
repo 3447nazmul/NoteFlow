@@ -53,6 +53,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   Note? _note;
   bool _hasUnsavedChanges = false;
+  bool _hasApiKey = true;
 
   // Auto-save
   Timer? _autoSaveTimer;
@@ -83,6 +84,21 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _quillController.document.changes.listen((_) => _updateStats());
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadNote());
+    _checkApiKey();
+  }
+
+  Future<void> _checkApiKey() async {
+    final config = context.read<AppConfigService>();
+    if (config.useGlobalApiKeys) {
+      if (mounted) setState(() => _hasApiKey = true);
+      return;
+    }
+    final key = await ApiKeyService().getActiveKey();
+    if (mounted) {
+      setState(() {
+        _hasApiKey = key != null && key.trim().isNotEmpty;
+      });
+    }
   }
 
   @override
@@ -680,6 +696,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
     final cs = Theme.of(context).colorScheme;
     final languages = [
+      'Bengali',
+      'Hindi',
+      'English',
       'Spanish',
       'French',
       'German',
@@ -989,6 +1008,33 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       textCapitalization: TextCapitalization.sentences,
                     ),
 
+                    if (!_hasApiKey) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.auto_awesome_rounded, size: 18, color: cs.primary),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Add your API key in settings to experience full AI features',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 4),
 
                     // Body field
@@ -1065,13 +1111,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               onOcr: _pickImageAndExtractText,
               onAttachImage: _pickImage,
               onAttachFile: _pickFile,
+              showAiTools: _hasApiKey,
             ),
 
             // ─── Word / character count ───
             _StatsBar(wordCount: _wordCount, charCount: _charCount),
 
             // ─── AI action bar ───
-            AiActionBar(onAction: (action) => _handleAiAction(action)),
+            if (_hasApiKey)
+              AiActionBar(onAction: (action) => _handleAiAction(action)),
           ],
         ),
       ),
@@ -1095,17 +1143,19 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       centerTitle: true,
       actions: [
         // AI Chat
-        IconButton(
-          icon: const Icon(Icons.chat_bubble_outline_rounded),
-          tooltip: 'Note-Level Chat',
-          onPressed: () => _handleChatFromAppBar(),
-        ),
+        if (_hasApiKey)
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            tooltip: 'Note-Level Chat',
+            onPressed: () => _handleChatFromAppBar(),
+          ),
         // Translate
-        IconButton(
-          icon: const Icon(Icons.translate_rounded),
-          tooltip: 'Translate',
-          onPressed: () => _showTranslateDialog(),
-        ),
+        if (_hasApiKey)
+          IconButton(
+            icon: const Icon(Icons.translate_rounded),
+            tooltip: 'Translate',
+            onPressed: () => _showTranslateDialog(),
+          ),
         // Export as PDF
         IconButton(
           icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -1138,14 +1188,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             }
           },
           itemBuilder: (ctx) => [
-            const PopupMenuItem(
-              value: 'auto_summarize',
-              child: ListTile(
-                leading: Icon(Icons.auto_awesome_rounded),
-                title: Text('Magic Auto-Summarize'),
-                contentPadding: EdgeInsets.zero,
+            if (_hasApiKey)
+              const PopupMenuItem(
+                value: 'auto_summarize',
+                child: ListTile(
+                  leading: Icon(Icons.auto_awesome_rounded),
+                  title: Text('Magic Auto-Summarize'),
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
-            ),
             const PopupMenuItem(
               value: 'share_image',
               child: ListTile(
@@ -1235,6 +1286,7 @@ class _FormattingToolbar extends StatelessWidget {
   final VoidCallback onOcr;
   final VoidCallback onAttachImage;
   final VoidCallback onAttachFile;
+  final bool showAiTools;
 
   const _FormattingToolbar({
     required this.onBold,
@@ -1247,6 +1299,7 @@ class _FormattingToolbar extends StatelessWidget {
     required this.onOcr,
     required this.onAttachImage,
     required this.onAttachFile,
+    this.showAiTools = true,
   });
 
   @override
@@ -1302,18 +1355,20 @@ class _FormattingToolbar extends StatelessWidget {
               onPressed: onChecklist,
               isActive: checklistActive,
             ),
-            const SizedBox(width: 8),
-            Container(
-              height: 24,
-              width: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-            ),
-            const SizedBox(width: 8),
-            _ToolbarButton(
-              icon: Icons.document_scanner_outlined,
-              tooltip: 'Extract Text from Image',
-              onPressed: onOcr,
-            ),
+            if (showAiTools) ...[
+              const SizedBox(width: 8),
+              Container(
+                height: 24,
+                width: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.5),
+              ),
+              const SizedBox(width: 8),
+              _ToolbarButton(
+                icon: Icons.document_scanner_outlined,
+                tooltip: 'Extract Text from Image',
+                onPressed: onOcr,
+              ),
+            ],
             const SizedBox(width: 8),
             Container(
               height: 24,

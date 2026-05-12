@@ -50,10 +50,8 @@ void main() async {
     // Initialize Mobile Ads and fetch initial AppConfig concurrently
     if (firebaseReady) {
       await appConfigService.init();
-      await Future.wait([
-        MobileAds.instance.initialize(),
-        appConfigService.fetchInitialConfig(),
-      ]);
+      MobileAds.instance.initialize();
+      appConfigService.fetchInitialConfig();
     }
   } catch (e) {
     // Fallback if initialization fails

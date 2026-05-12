@@ -70,6 +70,15 @@ class AppConfigService extends ChangeNotifier {
   String get admobBannerId => _admobBannerId;
   String get admobInterstitialId => _admobInterstitialId;
 
+  // ─── Global API Key Override ───
+  bool _useGlobalApiKeys = false;
+  String _globalGeminiKey = '';
+  String _globalQwenKey = '';
+
+  bool get useGlobalApiKeys => _useGlobalApiKeys;
+  String get globalGeminiKey => _globalGeminiKey;
+  String get globalQwenKey => _globalQwenKey;
+
   // ─── Computed Properties ───
   bool get needsForceUpdate {
     return _isVersionGreaterThan(_forceUpdateVersion, _currentAppVersion);
@@ -125,6 +134,11 @@ class AppConfigService extends ChangeNotifier {
     _showAds = data['show_ads'] as bool? ?? false;
     _admobBannerId = data['admob_banner_id'] as String? ?? 'ca-app-pub-3940256099942544/6300978111';
     _admobInterstitialId = data['admob_interstitial_id'] as String? ?? 'ca-app-pub-3940256099942544/1033173712';
+
+    // Global API Key Override
+    _useGlobalApiKeys = data['use_global_api_keys'] as bool? ?? false;
+    _globalGeminiKey = data['global_gemini_key'] as String? ?? '';
+    _globalQwenKey = data['global_qwen_key'] as String? ?? '';
 
     notifyListeners();
   }

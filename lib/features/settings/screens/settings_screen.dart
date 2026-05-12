@@ -292,85 +292,171 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   const SizedBox(height: 32),
 
-                  // ─── Gemini Key Section ───
-                  _buildSectionIcon(
-                    Icons.auto_awesome_rounded,
-                    'Google Gemini API Key',
-                  ),
-                  const SizedBox(height: 12),
-                  _KeySection(
-                    hasKey: _hasGeminiKey,
-                    maskedKey: _maskedGemini,
-                    controller: _geminiController,
-                    obscure: _obscureGemini,
-                    isSaving: _isSavingGemini,
-                    hintText: 'AIzaSy...',
-                    onToggleObscure: () =>
-                        setState(() => _obscureGemini = !_obscureGemini),
-                    onSave: _saveGeminiKey,
-                    onDelete: _deleteGeminiKey,
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // ─── Qwen Key Section ───
-                  _buildSectionIcon(
-                    Icons.cloud_outlined,
-                    'Alibaba Qwen API Key',
-                  ),
-                  const SizedBox(height: 12),
-                  _KeySection(
-                    hasKey: _hasQwenKey,
-                    maskedKey: _maskedQwen,
-                    controller: _qwenController,
-                    obscure: _obscureQwen,
-                    isSaving: _isSavingQwen,
-                    hintText: 'sk-...',
-                    onToggleObscure: () =>
-                        setState(() => _obscureQwen = !_obscureQwen),
-                    onSave: _saveQwenKey,
-                    onDelete: _deleteQwenKey,
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // ─── Test Connection ───
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: _isTesting ? null : _testActiveProvider,
-                      icon: _isTesting
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: cs.primary,
-                              ),
-                            )
-                          : Icon(
-                              Icons.wifi_tethering_rounded,
-                              size: 20,
-                              color: cs.primary,
-                            ),
-                      label: Text(
-                        _isTesting
-                            ? 'Testing…'
-                            : 'Test ${_activeProvider == AiProvider.gemini ? "Gemini" : "Qwen"} Connection',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                  // ─── API Key Sections (animated transition) ───
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SizeTransition(
+                          sizeFactor: animation,
+                          axisAlignment: -1.0,
+                          child: child,
                         ),
-                      ),
-                    ),
-                  ),
+                      );
+                    },
+                    layoutBuilder: (currentChild, previousChildren) {
+                      return Stack(
+                        alignment: Alignment.topCenter,
+                        children: [
+                          ...previousChildren,
+                          if (currentChild != null) currentChild,
+                        ],
+                      );
+                    },
+                    child: config.useGlobalApiKeys
+                        ? Container(
+                            key: const ValueKey('premium_banner'),
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHigh.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: cs.primary.withValues(alpha: 0.18),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: cs.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    Icons.auto_awesome_rounded,
+                                    color: cs.primary,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '✨ Premium AI Unlocked',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          color: cs.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'AI features are powered by the developer. No API key required!',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 13,
+                                          height: 1.5,
+                                          color: cs.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Column(
+                            key: const ValueKey('manual_keys'),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // ─── Gemini Key Section ───
+                              _buildSectionIcon(
+                                Icons.auto_awesome_rounded,
+                                'Google Gemini API Key',
+                              ),
+                              const SizedBox(height: 12),
+                              _KeySection(
+                                hasKey: _hasGeminiKey,
+                                maskedKey: _maskedGemini,
+                                controller: _geminiController,
+                                obscure: _obscureGemini,
+                                isSaving: _isSavingGemini,
+                                hintText: 'AIzaSy...',
+                                onToggleObscure: () =>
+                                    setState(() => _obscureGemini = !_obscureGemini),
+                                onSave: _saveGeminiKey,
+                                onDelete: _deleteGeminiKey,
+                              ),
 
-                  // Test result
-                  if (_testResult != null) ...[
-                    const SizedBox(height: 14),
-                    _ResultCard(message: _testResult!, isSuccess: _testSuccess),
-                  ],
+                              const SizedBox(height: 28),
+
+                              // ─── Qwen Key Section ───
+                              _buildSectionIcon(
+                                Icons.cloud_outlined,
+                                'Alibaba Qwen API Key',
+                              ),
+                              const SizedBox(height: 12),
+                              _KeySection(
+                                hasKey: _hasQwenKey,
+                                maskedKey: _maskedQwen,
+                                controller: _qwenController,
+                                obscure: _obscureQwen,
+                                isSaving: _isSavingQwen,
+                                hintText: 'sk-...',
+                                onToggleObscure: () =>
+                                    setState(() => _obscureQwen = !_obscureQwen),
+                                onSave: _saveQwenKey,
+                                onDelete: _deleteQwenKey,
+                              ),
+
+                              const SizedBox(height: 28),
+
+                              // ─── Test Connection ───
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: OutlinedButton.icon(
+                                  onPressed: _isTesting ? null : _testActiveProvider,
+                                  icon: _isTesting
+                                      ? SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: cs.primary,
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.wifi_tethering_rounded,
+                                          size: 20,
+                                          color: cs.primary,
+                                        ),
+                                  label: Text(
+                                    _isTesting
+                                        ? 'Testing…'
+                                        : 'Test ${_activeProvider == AiProvider.gemini ? "Gemini" : "Qwen"} Connection',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              // Test result
+                              if (_testResult != null) ...[
+                                const SizedBox(height: 14),
+                                _ResultCard(message: _testResult!, isSuccess: _testSuccess),
+                              ],
+                            ],
+                          ),
+                  ),
 
                   const SizedBox(height: 32),
 

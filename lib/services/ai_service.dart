@@ -130,7 +130,8 @@ class AiService {
 
   // AI NOTE: Uses Gemini to extract text from an image via OCR.
   Future<String> extractTextFromImage(Uint8List imageBytes) async {
-    final apiKey = await _keyService.getActiveKey();
+    final provider = await _keyService.getActiveProvider();
+    final apiKey = await _resolveApiKey(provider);
 
     if (apiKey == null || apiKey.isEmpty) {
       return 'No AI API key found. Add it in Settings.';
@@ -182,7 +183,7 @@ class AiService {
 
   // AI NOTE: Uses Gemini to transcribe audio from the given bytes.
   Future<String> transcribeAudio(Uint8List audioBytes, String mimeType) async {
-    final apiKey = await _keyService.getGeminiKey();
+    final apiKey = await _resolveApiKey(AiProvider.gemini);
     if (apiKey == null || apiKey.isEmpty) {
       return 'Gemini API key is required for audio transcription.';
     }
@@ -249,7 +250,7 @@ class AiService {
   // AI NOTE: Internal helper to send a prompt to the active AI provider.
   Future<String> _sendPrompt(String systemPrompt, String userMessage) async {
     final provider = await _keyService.getActiveProvider();
-    final apiKey = await _keyService.getActiveKey();
+    final apiKey = await _resolveApiKey(provider);
 
     if (apiKey == null || apiKey.isEmpty) {
       final name = provider == AiProvider.gemini ? 'Gemini' : 'Qwen';
@@ -334,5 +335,19 @@ class AiService {
           body['error']?['message'] ?? body['message'] ?? 'Unknown error';
       return 'Qwen error ${response.statusCode}: $msg';
     }
+  }
+
+  // ─── API Key Resolution ───
+
+  /// Returns the global key if the developer override is enabled,
+  /// otherwise falls back to the user's locally saved key.
+  Future<String?> _resolveApiKey(AiProvider provider) async {
+    if (_appConfigService.useGlobalApiKeys) {
+      final globalKey = provider == AiProvider.gemini
+          ? _appConfigService.globalGeminiKey
+          : _appConfigService.globalQwenKey;
+      if (globalKey.trim().isNotEmpty) return globalKey;
+    }
+    return _keyService.getActiveKey();
   }
 }
